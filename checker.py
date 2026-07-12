@@ -5,8 +5,6 @@ TikTok Shop stock checker for e.l.f. Sheer For It Blush Tint - Maple Latte.
 Checks the product page for the "Maple Latte" variant's stock status.
 If it's in stock (and it wasn't the last time we checked), sends a text
 via your carrier's email-to-SMS gateway.
-
-Run this on a schedule (GitHub Actions, cron, Task Scheduler, etc).
 """
 
 import json
@@ -47,28 +45,16 @@ def save_state(state):
 
 
 def fetch_stock_status():
-    """
-    Fetch the product page and look for the embedded JSON payload
-    (TikTok Shop server-renders product/SKU data into a <script> tag).
-    Returns True if Maple Latte appears in stock, False if sold out,
-    None if we couldn't determine it (page structure changed / blocked).
-    """
     resp = requests.get(PRODUCT_URL, headers=HEADERS, timeout=20)
     resp.raise_for_status()
     html = resp.text
 
-    # TikTok Shop embeds product data as JSON in a script tag.
-    # We search broadly for a block mentioning the shade name and
-    # nearby stock/quantity fields rather than relying on one exact key,
-    # since TikTok changes its internal schema periodically.
     match = re.search(
         r'\{[^{}]*"' + re.escape(TARGET_SHADE.title()) + r'"[^{}]*\}',
         html,
         re.IGNORECASE,
     )
     if not match:
-        # Fallback: case-insensitive search on raw text for shade name
-        # plus nearby stock-related keywords.
         idx = html.lower().find(TARGET_SHADE)
         if idx == -1:
             return None
@@ -88,7 +74,7 @@ def fetch_stock_status():
 def send_text(message):
     sender = os.environ["EMAIL_ADDRESS"]
     app_password = os.environ["EMAIL_APP_PASSWORD"]
-    gateway_address = os.environ["TEXT_GATEWAY"]  # e.g. 1234567890@vtext.com
+    gateway_address = os.environ["TEXT_GATEWAY"]
 
     msg = MIMEText(message)
     msg["From"] = sender
@@ -105,7 +91,6 @@ def main():
     status = fetch_stock_status()
 
     if status is None:
-        if status is None:
         print("Could not determine stock status this run (page structure may have "
               "changed, or the request was blocked). No alert sent.")
         save_state(state)
