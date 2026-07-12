@@ -22,7 +22,7 @@ PRODUCT_URL = (
     "https://shop.tiktok.com/us/pdp/sheer-for-it-blush-tint-by-e-l-f-cosmetics-"
     "multi-use-hydrating-stain/1731162610730111267"
 )
-TARGET_SHADE = "maple latte"
+TARGET_SHADE = "Maple Latte"
 STATE_FILE = "state.json"
 
 HEADERS = {
@@ -32,6 +32,15 @@ HEADERS = {
     ),
     "Accept-Language": "en-US,en;q=0.9",
 }
+
+# Matches the SKU block TikTok embeds for each color, e.g.:
+#   "sku_property_value_name":"Maple Latte"}],"sku_quantity":{...,
+#   "available_quantity":0},...
+STOCK_PATTERN = re.compile(
+    r'"sku_property_value_name"\s*:\s*"' + re.escape(TARGET_SHADE) + r'".{0,1000}?'
+    r'"available_quantity"\s*:\s*(\d+)',
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def load_state():
@@ -48,71 +57,26 @@ def save_state(state):
 
 def fetch_stock_status():
     """
-    Fetch the product page and look for the embedded JSON payload
-    (TikTok Shop server-renders product/SKU data into a <script> tag).
-    Returns True if Maple Latte appears in stock, False if sold out,
-    None if we couldn't determine it (page structure changed / blocked).
+    Returns True if Maple Latte's available_quantity > 0, False if it's 0,
+    None if we couldn't find the field at all (page structure changed).
     """
     resp = requests.get(PRODUCT_URL, headers=HEADERS, timeout=20)
-    print(f"DEBUG: HTTP status code: {resp.status_code}")
-    print(f"DEBUG: response length: {len(resp.text)} characters")
-    print(f"DEBUG: first 300 characters of response:\n{resp.text[:300]}")
     resp.raise_for_status()
     html = resp.text
 
-    print(f"DEBUG: does response contain 'maple latte' (any case)? "
-          f"{'maple latte' in html.lower()}")
-    print(f"DEBUG: does response contain 'captcha'? {'captcha' in html.lower()}")
-    print(f"DEBUG: does response contain 'verify'? {'verify' in html.lower()}")
-
-    lowered_html = html.lower()
-    occurrence_count = lowered_html.count(TARGET_SHADE)
-    print(f"DEBUG: 'maple latte' appears {occurrence_count} time(s) in the page")
-    start = 0
-    occurrence_num = 0
-    while True:
-        idx = lowered_html.find(TARGET_SHADE, start)
-        if idx == -1 or occurrence_num >= 5:
-            break
-        occurrence_num += 1
-        snippet = html[max(0, idx - 400) : idx + 400]
-        print(f"DEBUG: --- occurrence {occurrence_num} (context) ---")
-        print(snippet)
-        print("DEBUG: --- end occurrence ---")
-        start = idx + 1
-
-    # TikTok Shop embeds product data as JSON in a script tag.
-    # We search broadly for a block mentioning the shade name and
-    # nearby stock/quantity fields rather than relying on one exact key,
-    # since TikTok changes its internal schema periodically.
-    match = re.search(
-        r'\{[^{}]*"' + re.escape(TARGET_SHADE.title()) + r'"[^{}]*\}',
-        html,
-        re.IGNORECASE,
-    )
+    match = STOCK_PATTERN.search(html)
     if not match:
-        # Fallback: case-insensitive search on raw text for shade name
-        # plus nearby stock-related keywords.
-        idx = html.lower().find(TARGET_SHADE)
-        if idx == -1:
-            return None
-        window = html[max(0, idx - 500) : idx + 500]
-    else:
-        window = match.group(0)
+        return None
 
-    lowered = window.lower()
-    if "out of stock" in lowered or '"stock":0' in lowered or '"available":false' in lowered:
-        return False
-    if "in stock" in lowered or '"available":true' in lowered:
-        return True
-
-    return None
+    available_quantity = int(match.group(1))
+    print(f"DEBUG: available_quantity for Maple Latte = {available_quantity}")
+    return available_quantity > 0
 
 
 def send_text(message):
     sender = os.environ["EMAIL_ADDRESS"]
     app_password = os.environ["EMAIL_APP_PASSWORD"]
-    gateway_address = os.environ["TEXT_GATEWAY"]  # e.g. 1234567890@vtext.com
+    gateway_address = os.environ["TEXT_GATEWAY"]
 
     msg = MIMEText(message)
     msg["From"] = sender
