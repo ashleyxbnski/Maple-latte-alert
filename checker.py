@@ -5,6 +5,8 @@ TikTok Shop stock checker for e.l.f. Sheer For It Blush Tint - Maple Latte.
 Checks the product page for the "Maple Latte" variant's stock status.
 If it's in stock (and it wasn't the last time we checked), sends a text
 via your carrier's email-to-SMS gateway.
+
+Run this on a schedule (GitHub Actions, cron, Task Scheduler, etc).
 """
 
 import json
@@ -46,8 +48,16 @@ def save_state(state):
 
 def fetch_stock_status():
     resp = requests.get(PRODUCT_URL, headers=HEADERS, timeout=20)
+    print(f"DEBUG: HTTP status code: {resp.status_code}")
+    print(f"DEBUG: response length: {len(resp.text)} characters")
+    print(f"DEBUG: first 300 characters of response:\n{resp.text[:300]}")
     resp.raise_for_status()
     html = resp.text
+
+    print(f"DEBUG: does response contain 'maple latte' (any case)? "
+          f"{'maple latte' in html.lower()}")
+    print(f"DEBUG: does response contain 'captcha'? {'captcha' in html.lower()}")
+    print(f"DEBUG: does response contain 'verify'? {'verify' in html.lower()}")
 
     match = re.search(
         r'\{[^{}]*"' + re.escape(TARGET_SHADE.title()) + r'"[^{}]*\}',
