@@ -47,6 +47,12 @@ def save_state(state):
 
 
 def fetch_stock_status():
+    """
+    Fetch the product page and look for the embedded JSON payload
+    (TikTok Shop server-renders product/SKU data into a <script> tag).
+    Returns True if Maple Latte appears in stock, False if sold out,
+    None if we couldn't determine it (page structure changed / blocked).
+    """
     resp = requests.get(PRODUCT_URL, headers=HEADERS, timeout=20)
     print(f"DEBUG: HTTP status code: {resp.status_code}")
     print(f"DEBUG: response length: {len(resp.text)} characters")
@@ -59,12 +65,34 @@ def fetch_stock_status():
     print(f"DEBUG: does response contain 'captcha'? {'captcha' in html.lower()}")
     print(f"DEBUG: does response contain 'verify'? {'verify' in html.lower()}")
 
+    lowered_html = html.lower()
+    occurrence_count = lowered_html.count(TARGET_SHADE)
+    print(f"DEBUG: 'maple latte' appears {occurrence_count} time(s) in the page")
+    start = 0
+    occurrence_num = 0
+    while True:
+        idx = lowered_html.find(TARGET_SHADE, start)
+        if idx == -1 or occurrence_num >= 5:
+            break
+        occurrence_num += 1
+        snippet = html[max(0, idx - 400) : idx + 400]
+        print(f"DEBUG: --- occurrence {occurrence_num} (context) ---")
+        print(snippet)
+        print("DEBUG: --- end occurrence ---")
+        start = idx + 1
+
+    # TikTok Shop embeds product data as JSON in a script tag.
+    # We search broadly for a block mentioning the shade name and
+    # nearby stock/quantity fields rather than relying on one exact key,
+    # since TikTok changes its internal schema periodically.
     match = re.search(
         r'\{[^{}]*"' + re.escape(TARGET_SHADE.title()) + r'"[^{}]*\}',
         html,
         re.IGNORECASE,
     )
     if not match:
+        # Fallback: case-insensitive search on raw text for shade name
+        # plus nearby stock-related keywords.
         idx = html.lower().find(TARGET_SHADE)
         if idx == -1:
             return None
@@ -84,7 +112,7 @@ def fetch_stock_status():
 def send_text(message):
     sender = os.environ["EMAIL_ADDRESS"]
     app_password = os.environ["EMAIL_APP_PASSWORD"]
-    gateway_address = os.environ["TEXT_GATEWAY"]
+    gateway_address = os.environ["TEXT_GATEWAY"]  # e.g. 1234567890@vtext.com
 
     msg = MIMEText(message)
     msg["From"] = sender
