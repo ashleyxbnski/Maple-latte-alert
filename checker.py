@@ -105,8 +105,10 @@ def main():
     status = fetch_stock_status()
 
     if status is None:
+        if status is None:
         print("Could not determine stock status this run (page structure may have "
               "changed, or the request was blocked). No alert sent.")
+        save_state(state)
         sys.exit(0)
 
     print(f"Maple Latte in stock: {status}")
